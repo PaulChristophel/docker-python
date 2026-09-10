@@ -1,0 +1,113 @@
+name: Build and publish Python images
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "tumbleweed.dockerfile"
+      - "images.json"
+      - ".github/workflows/release.yml"
+  schedule:
+    - cron: "17 6 * * 2"
+  workflow_dispatch:
+
+permissions:
+  attestations: write
+  contents: read
+  id-token: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prepare:
+    name: Load build matrix
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.matrix.outputs.image }}
+      python: ${{ steps.matrix.outputs.python }}
+      variants: ${{ steps.matrix.outputs.variants }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Read image configuration
+        id: matrix
+        run: |
+          jq -e '.python | length > 0 and all(.[]; (.version | test("^[0-9]+\\.[0-9]+\\.[0-9]+$")) and (.sha256 | test("^[0-9a-f]{64}$")))' images.json
+          jq -e '[.python[].version | split(".")[0:2] | join(".")] | length == (unique | length)' images.json
+          echo "image=$(jq -r '.image' images.json)" >> "$GITHUB_OUTPUT"
+          echo "python=$(jq -c '[.python[] | . + {series: (.version | split(".")[0:2] | join("."))}]' images.json)" >> "$GITHUB_OUTPUT"
+          echo "variants=$(jq -c '.distributions as $distributions | [.variants[] | . + {distribution: $distributions[.os].name, distribution_version: $distributions[.os].version, base: $distributions[.os].base}]' images.json)" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Python ${{ matrix.python.version }} ${{ matrix.variant.tag }}
+    needs: prepare
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ${{ fromJSON(needs.prepare.outputs.python) }}
+        variant: ${{ fromJSON(needs.prepare.outputs.variants) }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: docker.io
+          username: pcm0
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Record build timestamp
+        id: build-time
+        run: echo "created=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+      - name: Generate image metadata
+        id: metadata
+        uses: docker/metadata-action@v6
+        env:
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
+        with:
+          images: ${{ needs.prepare.outputs.image }}
+          flavor: latest=false
+          tags: |
+            type=raw,value=${{ matrix.python.version }}-${{ matrix.variant.tag }}
+            type=raw,value=${{ matrix.python.series }}-${{ matrix.variant.tag }}
+            type=sha,prefix=${{ matrix.python.series }}-${{ matrix.variant.tag }}-sha-
+          labels: |
+            org.opencontainers.image.title=Python ${{ matrix.python.version }} (${{ matrix.variant.tag }})
+            org.opencontainers.image.description=CPython built from upstream source on openSUSE Tumbleweed.
+            org.opencontainers.image.version=${{ matrix.python.version }}
+            org.opencontainers.image.created=${{ steps.build-time.outputs.created }}
+            org.opencontainers.image.licenses=AGPL-3.0-or-later
+          annotations: |
+            org.opencontainers.image.title=Python ${{ matrix.python.version }} (${{ matrix.variant.tag }})
+            org.opencontainers.image.version=${{ matrix.python.version }}
+      - name: Build and push image
+        id: push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ${{ matrix.variant.dockerfile }}
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          sbom: true
+          tags: ${{ steps.metadata.outputs.tags }}
+          labels: ${{ steps.metadata.outputs.labels }}
+          annotations: ${{ steps.metadata.outputs.annotations }}
+          build-args: |
+            BASE=${{ matrix.variant.base }}
+            PYTHON_VERSION=${{ matrix.python.version }}
+            PYTHON_SHA256=${{ matrix.python.sha256 }}
+            CPU_CFLAGS=${{ vars.CPU_CFLAGS }}
+            IMAGE_DISTRIBUTION=${{ matrix.variant.distribution }}
+            IMAGE_DISTRIBUTION_VERSION=${{ matrix.variant.distribution_version }}
+            IMAGE_REPOSITORY=${{ needs.prepare.outputs.image }}
+            IMAGE_REVISION=${{ github.sha }}
+            IMAGE_CREATED=${{ steps.build-time.outputs.created }}
+          cache-from: type=gha,scope=python-${{ matrix.python.series }}-${{ matrix.variant.tag }}
+          cache-to: type=gha,mode=max,scope=python-${{ matrix.python.series }}-${{ matrix.variant.tag }}
+      - name: Generate provenance attestation
+        uses: actions/attest@v4
+        with:
+          subject-name: ${{ needs.prepare.outputs.image }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
