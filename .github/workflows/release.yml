@@ -2,7 +2,8 @@ name: Build and publish Python images
 
 on:
   push:
-    branches: [main]
+    branches:
+      - master
     paths:
       - "tumbleweed.dockerfile"
       - "images.json"
