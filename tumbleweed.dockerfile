@@ -1,4 +1,4 @@
-ARG BASE=docker.io/opensuse/tumbleweed:latest@sha256:b4406fd5a038f199f1a017aa96f1a5758775fdc807f5bf6525bbb7e125c31c58
+ARG BASE=docker.io/opensuse/tumbleweed:latest@sha256:a695c4524c31a343eec3061bd65e127d205d50631de6213ea4c0ffbea2f73244
 
 FROM ${BASE} AS python-builder
 # Supply these from images.json; deliberately no independent version defaults.
