@@ -6,6 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: write
   contents: write
   pull-requests: write
 
@@ -28,6 +29,7 @@ jobs:
       - name: Refresh source checksums and base image
         run: bash .github/scripts/update-images.sh
       - name: Create or update dependency pull request
+        id: pull-request
         uses: peter-evans/create-pull-request@v8
         with:
           branch: codex/update-image-pins
@@ -35,10 +37,29 @@ jobs:
           add-paths: images.json
           commit-message: "chore: update python and tumbleweed pins"
           title: "chore: update python and tumbleweed pins"
-          draft: true
+          draft: false
           body: |
             Updates configured Python series to their latest stable patch releases
             and recalculates SHA-256 from the upstream source archives.
             Updates the Tumbleweed digest and reads its snapshot version from the pinned image.
 
-            The existing release workflow builds and publishes after this PR is merged.
+            This PR is automatically squash-merged by the daily updater.
+            After merging, the updater dispatches the release workflow to build and publish.
+      - name: Merge image updates and start release
+        if: steps.pull-request.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ steps.pull-request.outputs.pull-request-number }}
+          PR_HEAD: ${{ steps.pull-request.outputs.pull-request-head-sha }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          # Merge only the exact update produced by this run; honor branch protections.
+          gh pr merge "$PR_NUMBER" --squash --match-head-commit "$PR_HEAD"
+          state=$(gh pr view "$PR_NUMBER" --json state --jq .state)
+          if [[ "$state" != "MERGED" ]]; then
+            echo "::error::Update PR has not merged; check required reviews, checks, or the merge queue."
+            exit 1
+          fi
+          # GITHUB_TOKEN merges do not trigger push workflows, so dispatch explicitly.
+          gh workflow run release.yml --ref "$DEFAULT_BRANCH"
