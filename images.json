@@ -17,8 +17,8 @@
   "distributions": {
     "tumbleweed": {
       "name": "tumbleweed",
-      "version": "20261009",
-      "base": "docker.io/opensuse/tumbleweed:latest@sha256:1e3c9020cc3e703f80208df37f357b38fd34ea24965c8e41cf76c4ec3680aa77"
+      "version": "20261010",
+      "base": "docker.io/opensuse/tumbleweed:latest@sha256:49fb36a95999b882581e0ad07378e0030b61542e05699c03b7f4089a12f7bfa0"
     }
   },
   "variants": [
