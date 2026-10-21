@@ -2,23 +2,23 @@
   "image": "docker.io/pcm0/python",
   "python": [
     {
-      "version": "3.14.8",
-      "sha256": "c2215904f02b175596dc49351585104f4bc20341e1c47378b26a2c274360ce73"
+      "version": "3.14.9",
+      "sha256": "e02d9ac21cebda6e46435369744a92c65cc7cd8669697694122cf97ffacd1e53"
     },
     {
       "version": "3.11.17",
       "sha256": "bfb74ad39efae27cda510f134ab408e00f9992c56851cfc0b1cdb5646da11599"
     },
     {
-      "version": "3.15.0",
-      "sha256": "ba4bed1ba346b916890b76d9e320451420aa69f6408997d33c66482eeae3d575"
+      "version": "3.15.1",
+      "sha256": "673ae7232d84c894729882c8257d300ef2d26523911bfd3917ec8ce7f526f99b"
     }
   ],
   "distributions": {
     "tumbleweed": {
       "name": "tumbleweed",
-      "version": "20261017",
-      "base": "docker.io/opensuse/tumbleweed:latest@sha256:dda5ee314542028c84b7f6ae4303ad66a8c4545c9b8e6f137ddbf2e175d28bb6"
+      "version": "20261020",
+      "base": "docker.io/opensuse/tumbleweed:latest@sha256:7df48ea164732cdebac69081179bcbed85b0573247f14846993e0ee3938f0e9c"
     }
   },
   "variants": [
