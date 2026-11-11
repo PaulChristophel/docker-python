@@ -10,7 +10,7 @@ ARG PYTHON_LDFLAGS="-Wl,-z,relro,-z,now -Wl,--as-needed -Wl,-rpath,'\$\$ORIGIN' 
 
 RUN test -n "${PYTHON_VERSION}" && test -n "${PYTHON_SHA256}" \
  && zypper --non-interactive --gpg-auto-import-keys install --no-recommends \
-      gcc make gawk findutils pkg-config glibc-devel linux-glibc-devel \
+      gcc make binutils gawk findutils pkg-config glibc-devel linux-glibc-devel \
       libopenssl-devel libffi-devel zlib-devel libbz2-devel xz-devel \
       readline-devel sqlite3-devel gdbm-devel ncurses-devel libuuid-devel \
       libzstd-devel libexpat-devel mpdecimal-devel systemtap-sdt-devel \
@@ -52,6 +52,13 @@ RUN LD_LIBRARY_PATH=/tmp/python-src \
  && LD_LIBRARY_PATH=/tmp/python-src make install DESTDIR=/tmp/python-install \
  && ln -s python3 /tmp/python-install/usr/local/bin/python \
  && ln -s pip3 /tmp/python-install/usr/local/bin/pip
+
+# Drop symbol tables and debug sections from libpython and the lib-dynload
+# extension modules (~60 MB on 3.15); the dynamic symbol table stays intact.
+RUN du -sh /tmp/python-install/usr/local/lib \
+ && find /tmp/python-install/usr/local/lib -type f -name '*.so*' \
+      -exec strip --strip-unneeded {} + \
+ && du -sh /tmp/python-install/usr/local/lib
 
 FROM ${BASE} AS runtime-builder
 RUN mkdir -p /mnt/rootfs \
